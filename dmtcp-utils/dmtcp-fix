@@ -1,0 +1,5 @@
+#!/system/bin/sh
+chown system /data/data/com.android.providers.settings/databases/settings.db*
+chgrp system /data/data/com.android.providers.settings/databases/settings.db*
+
+

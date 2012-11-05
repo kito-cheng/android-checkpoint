@@ -1,0 +1,52 @@
+From fddc7645fb8407b935b95d016f27c1619841a8f3 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Fri, 3 Aug 2012 16:15:12 +0800
+Subject: [PATCH 2/6] Zygote Support for checkpoint
+
+Change-Id: I2ffedaca0fa76fb3af8b0890e59728b18c1a7195
+---
+ core/java/com/android/internal/os/ZygoteInit.java |   14 +++++++++++++-
+ 1 files changed, 13 insertions(+), 1 deletions(-)
+
+diff --git a/core/java/com/android/internal/os/ZygoteInit.java b/core/java/com/android/internal/os/ZygoteInit.java
+index 7e80095..f8c8a5e 100644
+--- a/core/java/com/android/internal/os/ZygoteInit.java
++++ b/core/java/com/android/internal/os/ZygoteInit.java
+@@ -22,6 +22,7 @@ import android.content.res.TypedArray;
+ import android.graphics.drawable.Drawable;
+ import android.net.LocalServerSocket;
+ import android.os.Debug;
++import android.os.DMTCP;
+ import android.os.FileUtils;
+ import android.os.Process;
+ import android.os.SystemClock;
+@@ -519,7 +520,7 @@ public class ZygoteInit {
+             // Start profiling the zygote initialization.
+             SamplingProfilerIntegration.start();
+ 
+-            registerZygoteSocket();
++            //registerZygoteSocket();
+             EventLog.writeEvent(LOG_BOOT_PROGRESS_PRELOAD_START,
+                 SystemClock.uptimeMillis());
+             preload();
+@@ -537,6 +538,17 @@ public class ZygoteInit {
+                 throw new RuntimeException(argv[0] + USAGE_STRING);
+             }
+ 
++            Log.i(TAG, "!!!!!---------DMTCP------------!!!!!!!");
++            DMTCP.raiseCheckpointBarrier();
++            Log.i(TAG, "!!!!!---------start sync in zygote------------!!!!!!!");
++            DMTCP.synchronize();
++            Log.i(TAG, "!!!!!---------done sync in zygote------------!!!!!!!");
++            DMTCP.checkpoint();
++            Log.i(TAG, "!!!!!---------done ckpt in zygote------------!!!!!!!");
++            DMTCP.checkpointBarrier();
++            Log.i(TAG, "!!!!!---------done Barrier in zygote------------!!!!!!!");
++            registerZygoteSocket();
++
+             if (argv[1].equals("start-system-server")) {
+                 startSystemServer();
+             } else if (!argv[1].equals("")) {
+-- 
+1.7.7.6
+

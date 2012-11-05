@@ -1,0 +1,4 @@
+#!/system/bin/sh
+rm /data/dmtcp*
+rm /data/jassert*
+rm /data/ckpt*

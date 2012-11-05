@@ -1,0 +1,28 @@
+From 3d4542737682c3bb8a065092356742c20eeed6d3 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Mon, 5 Nov 2012 12:30:41 +0800
+Subject: [PATCH 5/6] Force disable EGL debug
+
+ - After the DMTCP restart, the cmdline may broken...
+
+Change-Id: I3c80f13a4b3cc5c60a33b8931c0adb7a56f6062a
+---
+ opengl/libs/EGL/egl.cpp |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/opengl/libs/EGL/egl.cpp b/opengl/libs/EGL/egl.cpp
+index 6ad06af..5471252 100644
+--- a/opengl/libs/EGL/egl.cpp
++++ b/opengl/libs/EGL/egl.cpp
+@@ -99,7 +99,7 @@ void initEglTraceLevel() {
+         }
+         fclose(file);
+     }
+-
++    gEGLDebugLevel = 0;
+     if (gEGLDebugLevel > 0)
+     {
+         property_get("debug.egl.debug_port", value, "5039");
+-- 
+1.7.7.6
+

@@ -1,0 +1,98 @@
+From 7b38e1e38fa51461e2d45e70ae343d5443c924eb Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Mon, 5 Nov 2012 12:27:52 +0800
+Subject: [PATCH 3/3] bionic: Implement pthread_tryjoin_np
+
+Change-Id: I346464738aa4ceb3a49b50b151665177cf1bcf41
+---
+ libc/bionic/pthread.c  |   61 ++++++++++++++++++++++++++++++++++++++++++++++++
+ libc/include/pthread.h |    1 +
+ 2 files changed, 62 insertions(+), 0 deletions(-)
+
+diff --git a/libc/bionic/pthread.c b/libc/bionic/pthread.c
+index b80d26e..1210578 100644
+--- a/libc/bionic/pthread.c
++++ b/libc/bionic/pthread.c
+@@ -637,6 +637,67 @@ void pthread_exit(void * retval)
+         _exit_with_stack_teardown(stack_base, stack_size, (int)retval);
+ }
+ 
++int pthread_tryjoin_np(pthread_t thid, void ** ret_val)
++{
++    pthread_internal_t*  thread = (pthread_internal_t*)thid;
++    int                  count;
++    int               cond_ret;
++    struct timespec  wait_time;
++
++    // check that the thread still exists and is not detached
++    pthread_mutex_lock(&gThreadListLock);
++
++    for (thread = gThreadList; thread != NULL; thread = thread->next)
++        if (thread == (pthread_internal_t*)thid)
++            goto FoundIt;
++
++    pthread_mutex_unlock(&gThreadListLock);
++    return ESRCH;
++
++FoundIt:
++    if (thread->attr.flags & PTHREAD_ATTR_FLAG_DETACHED) {
++        pthread_mutex_unlock(&gThreadListLock);
++        return EINVAL;
++    }
++
++   /* wait for thread death when needed
++    *
++    * if the 'join_count' is negative, this is a 'zombie' thread that
++    * is already dead and without stack/TLS
++    *
++    * otherwise, we need to increment 'join-count' and wait to be signaled
++    */
++   count = thread->join_count;
++    if (count >= 0) {
++        wait_time.tv_sec = 0;
++        /* wait 100 us */
++        wait_time.tv_nsec = 1000 * 100;
++
++      thread->join_count += 1;
++      cond_ret = pthread_cond_timedwait( &thread->join_cond,
++                                         &gThreadListLock,
++                                         &wait_time );
++      count = --thread->join_count;
++      if (cond_ret == ETIMEDOUT) {
++        thread->join_count -= 1;
++        pthread_mutex_unlock(&gThreadListLock);
++        return EBUSY;
++      }
++    }
++    if (ret_val)
++        *ret_val = thread->return_value;
++
++    /* remove thread descriptor when we're the last joiner or when the
++     * thread was already a zombie.
++     */
++    if (count <= 0) {
++        _pthread_internal_remove_locked(thread);
++        _pthread_internal_free(thread);
++    }
++    pthread_mutex_unlock(&gThreadListLock);
++    return 0;
++}
++
+ int pthread_join(pthread_t thid, void ** ret_val)
+ {
+     pthread_internal_t*  thread = (pthread_internal_t*)thid;
+diff --git a/libc/include/pthread.h b/libc/include/pthread.h
+index 56c48ea..156854c 100644
+--- a/libc/include/pthread.h
++++ b/libc/include/pthread.h
+@@ -140,6 +140,7 @@ int pthread_create(pthread_t *thread, pthread_attr_t const * attr,
+                    void *(*start_routine)(void *), void * arg);
+ void pthread_exit(void * retval);
+ int pthread_join(pthread_t thid, void ** ret_val);
++int pthread_tryjoin_np(pthread_t thid, void ** ret_val);
+ int pthread_detach(pthread_t  thid);
+ 
+ __attribute__((const))
+-- 
+1.7.7.6
+

@@ -1,0 +1,58 @@
+From 350413ecb34a2df68adac26983a3c5fa65f9e9f7 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Fri, 3 Aug 2012 16:08:10 +0800
+Subject: [PATCH 1/2] Reserve the ashmem fd for DMTCP support
+
+Change-Id: Id578f1b8cb2c0de2a63472296f8ebb9b0ce71e2e
+---
+ vm/LinearAlloc.cpp |    2 +-
+ vm/Misc.cpp        |    6 +++++-
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/vm/LinearAlloc.cpp b/vm/LinearAlloc.cpp
+index 432b37b..2e2e0eb 100644
+--- a/vm/LinearAlloc.cpp
++++ b/vm/LinearAlloc.cpp
+@@ -149,7 +149,7 @@ LinearAllocHdr* dvmLinearAllocCreate(Object* classLoader)
+         return NULL;
+     }
+ 
+-    close(fd);
++    //close(fd);
+ #else /*USE_ASHMEM*/
+     // MAP_ANON is listed as "deprecated" on Linux,
+     // but MAP_ANONYMOUS is not defined under Mac OS X.
+diff --git a/vm/Misc.cpp b/vm/Misc.cpp
+index 1365516..54b7b4f 100644
+--- a/vm/Misc.cpp
++++ b/vm/Misc.cpp
+@@ -606,7 +606,7 @@ size_t strlcpy(char *dst, const char *src, size_t size) {
+  */
+ void *dvmAllocRegion(size_t byteCount, int prot, const char *name) {
+     void *base;
+-    int fd, ret;
++    int fd;//, ret;
+ 
+     byteCount = ALIGN_UP_TO_PAGE_SIZE(byteCount);
+     fd = ashmem_create_region(name, byteCount);
+@@ -614,13 +614,17 @@ void *dvmAllocRegion(size_t byteCount, int prot, const char *name) {
+         return NULL;
+     }
+     base = mmap(NULL, byteCount, prot, MAP_PRIVATE, fd, 0);
++#if 0
+     ret = close(fd);
++#endif
+     if (base == MAP_FAILED) {
+         return NULL;
+     }
++#if 0
+     if (ret == -1) {
+         return NULL;
+     }
++#endif
+     return base;
+ }
+ 
+-- 
+1.7.7.6
+

@@ -1,0 +1,3 @@
+#!/system/bin/sh
+dmtcp_command k
+stop zygote

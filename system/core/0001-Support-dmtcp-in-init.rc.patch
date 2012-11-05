@@ -1,0 +1,58 @@
+From 22e4b33cc81887e04677802f8ff11f7bab9f1c57 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Mon, 5 Nov 2012 12:56:52 +0800
+Subject: [PATCH] Support dmtcp in init.rc
+
+ - Disable randomnize va
+ - Add zygote_ori for start zygote without dmtcp
+ - zygote start /system/bin/zygote_dmtcp.sh instead of start
+   zygote directly.
+
+Change-Id: I893026c00bc553655aaf31fbab6cbe4301692b8b
+---
+ rootdir/init.rc |   15 +++++++++++++--
+ 1 files changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/rootdir/init.rc b/rootdir/init.rc
+index 83df6f4..1282f18 100644
+--- a/rootdir/init.rc
++++ b/rootdir/init.rc
+@@ -15,6 +15,7 @@ loglevel 3
+ 
+ # setup the global environment
+     export PATH /sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
++    export DMTCP_TMPDIR /data
+     export LD_LIBRARY_PATH /vendor/lib:/system/lib
+     export ANDROID_BOOTLOGO 1
+     export ANDROID_CACHE /cache
+@@ -68,7 +69,7 @@ loglevel 3
+     write /proc/sys/kernel/sched_wakeup_granularity_ns 2000000
+     write /proc/sys/kernel/sched_compat_yield 1
+     write /proc/sys/kernel/sched_child_runs_first 0
+-    write /proc/sys/kernel/randomize_va_space 2
++    write /proc/sys/kernel/randomize_va_space 0
+ 
+ # Create cgroup mount points for process groups
+     mkdir /dev/cpuctl
+@@ -442,7 +443,17 @@ service surfaceflinger /system/bin/surfaceflinger
+     group graphics
+     onrestart restart zygote
+ 
+-service zygote /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server
++service zygote_ori /system/bin/app_process -Xzygote /system/bin --zygote --start-system-server
++    class main
++    socket zygote stream 660 root system
++    onrestart write /sys/android_power/request_state wake
++    onrestart write /sys/power/state on
++    onrestart restart media
++    onrestart restart netd
++    disabled
++    oneshot
++
++service zygote /system/bin/zygote_dmtcp.sh
+     class main
+     socket zygote stream 660 root system
+     onrestart write /sys/android_power/request_state wake
+-- 
+1.7.7.6
+

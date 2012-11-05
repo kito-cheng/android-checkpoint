@@ -1,0 +1,39 @@
+DMTCP/Android
+-------------
+
+Snapshot date: Nov 5, 2012
+By: 0xlab - http://0xlab.org/
+
+The development snapshot has been tested on Cyanogenmod/ICS and AOSP/ICS.
+
+Quick Note:
+ - Apply the patch to the correspoding folder, for example the bionic/*.patch
+   apply to the android/bionic.
+
+ - You should put all file in dmtcp-utils into /system/bin/ and chmod to 700.
+   * zygote_dmtcp.sh : For starting zygote with DMTCP.
+   * dmtcp-fix : Fix premission for android system files.
+   * dmtcp-close : Script for close zygote with DMTCP, if you just `stop zygote`
+                   zygote with dmtcp may become zombie.
+   * dmtcp-clear : Clear checkpoint image file and DMTCP debug info.
+
+ - The init.rc script appends serval zygote variants
+   * zygote_ori :
+     Starting zygote without DMTCP.
+   * zygote :
+     Script for starting zygote with DMTCP, restart zygote if the image file
+     exist, otherwise will start with DMTCP and build a checkpoint image.
+
+ - zygote will freeze when booting into Launcher upon executing start/restart
+   with DMTCP.  You could be aware of the following messages by logcat:
+    "Input event dispatching timed out sending to com.xxx.xxx"
+
+ - DMTCP may cause restart failure if the `new` dynamic linker overlaps with the
+   `old` (checkpoint image) address space because the new dynamic linker in
+   ICS's bionic libc is no longer loaded into fix address.
+
+ - First boot time you should start zygote_ori instead of zygote to finish the
+   apk opt process.
+
+ - Some core file may have wrong access premission after restart dmtcp, you can
+   fix it by run the dmtcp-fix.

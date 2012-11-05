@@ -1,0 +1,49 @@
+From b06ccbd704198b710adf38d75e2a2902fd36d4f4 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Sat, 27 Oct 2012 15:35:46 +0800
+Subject: [PATCH 4/6] DMTCP:Add isBlockBinder API
+
+Change-Id: I5baea8dcc9a4fd8776a321b3ea0aa93c134060a0
+---
+ core/java/android/os/DMTCP.java |    1 +
+ core/jni/android_os_DMTCP.cpp   |    6 ++++++
+ 2 files changed, 7 insertions(+), 0 deletions(-)
+
+diff --git a/core/java/android/os/DMTCP.java b/core/java/android/os/DMTCP.java
+index 77be56e..b5690dd 100644
+--- a/core/java/android/os/DMTCP.java
++++ b/core/java/android/os/DMTCP.java
+@@ -27,5 +27,6 @@ public class DMTCP
+     public static native int synchronize();
+     public static native int blockBinder();
+     public static native int unblockBinder();
++    public static native int isBlockBinder();
+ }
+ 
+diff --git a/core/jni/android_os_DMTCP.cpp b/core/jni/android_os_DMTCP.cpp
+index dda6523..fbfd6d5 100644
+--- a/core/jni/android_os_DMTCP.cpp
++++ b/core/jni/android_os_DMTCP.cpp
+@@ -58,6 +58,10 @@ static jint nativeBlockBinder(JNIEnv *env, jobject clazz) {
+ static jint nativeUnblockBinder(JNIEnv *env, jobject clazz) {
+     return (jint)dmtcpUnblockBinder();
+ }
++
++static jint nativeIsBlockBinder(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpIsBlockBinder();
++}
+ /*
+  * JNI registration.
+  */
+@@ -82,6 +86,8 @@ static JNINativeMethod g_methods[] = {
+             (void*)nativeBlockBinder },
+     { "unblockBinder", "()I",
+             (void*)nativeUnblockBinder },
++    { "isBlockBinder", "()I",
++            (void*)nativeIsBlockBinder },
+ };
+ 
+ int register_android_os_DMTCP(JNIEnv* env)
+-- 
+1.7.7.6
+

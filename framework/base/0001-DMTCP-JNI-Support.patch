@@ -1,0 +1,193 @@
+From d44d46c260c4453997852271f0a0e5fff8439039 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Fri, 3 Aug 2012 16:14:55 +0800
+Subject: [PATCH 1/6] DMTCP JNI Support
+
+Change-Id: I37d748f4c93ebf56d446dfffa3bf5284cf956234
+---
+ core/java/android/os/DMTCP.java |   29 ++++++++++++++
+ core/jni/Android.mk             |    7 ++-
+ core/jni/AndroidRuntime.cpp     |    2 +
+ core/jni/android_os_DMTCP.cpp   |   82 +++++++++++++++++++++++++++++++++++++++
+ 4 files changed, 118 insertions(+), 2 deletions(-)
+ create mode 100644 core/java/android/os/DMTCP.java
+ create mode 100644 core/jni/android_os_DMTCP.cpp
+
+diff --git a/core/java/android/os/DMTCP.java b/core/java/android/os/DMTCP.java
+new file mode 100644
+index 0000000..57a716e
+--- /dev/null
++++ b/core/java/android/os/DMTCP.java
+@@ -0,0 +1,29 @@
++/*
++ * Copyright (C) 2006 The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++package android.os;
++
++public class DMTCP
++{
++    public static native int isEnable();
++    public static native int checkpoint();
++    public static native int delayCheckpointsLock();
++    public static native int delayCheckpointsUnlock();
++    public static native int raiseCheckpointBarrier();
++    public static native int checkpointBarrier();
++    public static native int synchronize();
++}
++
+diff --git a/core/jni/Android.mk b/core/jni/Android.mk
+index 3853973..03a33bc 100755
+--- a/core/jni/Android.mk
++++ b/core/jni/Android.mk
+@@ -156,7 +156,8 @@ LOCAL_SRC_FILES:= \
+ 	android_app_backup_FullBackup.cpp \
+ 	android_content_res_ObbScanner.cpp \
+ 	android_content_res_Configuration.cpp \
+-        android_animation_PropertyValuesHolder.cpp
++        android_animation_PropertyValuesHolder.cpp \
++        android_os_DMTCP.cpp
+ 
+ ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
+ 	LOCAL_SRC_FILES += org_codeaurora_Performance.cpp
+@@ -189,7 +190,8 @@ LOCAL_C_INCLUDES += \
+ 	external/harfbuzz/src \
+ 	external/zlib \
+ 	frameworks/opt/emoji \
+-	libcore/include
++	libcore/include \
++	external/dmtcp/dmtcp/src
+ 
+ LOCAL_SHARED_LIBRARIES := \
+ 	libexpat \
+@@ -222,6 +224,7 @@ LOCAL_SHARED_LIBRARIES := \
+ 	libusbhost \
+ 	libharfbuzz \
+ 	libz \
++	libdmtcpaware
+ 
+ ifeq ($(USE_OPENGL_RENDERER),true)
+ 	LOCAL_SHARED_LIBRARIES += libhwui
+diff --git a/core/jni/AndroidRuntime.cpp b/core/jni/AndroidRuntime.cpp
+index 5fa3172..3da036c 100644
+--- a/core/jni/AndroidRuntime.cpp
++++ b/core/jni/AndroidRuntime.cpp
+@@ -181,6 +181,7 @@ extern int register_android_content_res_PackageRedirectionMap(JNIEnv* env);
+ #ifdef QCOM_HARDWARE
+ extern int register_org_codeaurora_Performance(JNIEnv *env);
+ #endif
++extern int register_android_os_DMTCP(JNIEnv *env);
+ 
+ static AndroidRuntime* gCurRuntime = NULL;
+ 
+@@ -1212,6 +1213,7 @@ static const RegJNIRec gRegJNI[] = {
+ #ifdef QCOM_HARDWARE
+     REG_JNI(register_org_codeaurora_Performance),
+ #endif
++    REG_JNI(register_android_os_DMTCP),
+ };
+ 
+ /*
+diff --git a/core/jni/android_os_DMTCP.cpp b/core/jni/android_os_DMTCP.cpp
+new file mode 100644
+index 0000000..df494c1
+--- /dev/null
++++ b/core/jni/android_os_DMTCP.cpp
+@@ -0,0 +1,82 @@
++/*
++ * Copyright 2006, The Android Open Source Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License"); 
++ * you may not use this file except in compliance with the License. 
++ * You may obtain a copy of the License at 
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0 
++ *
++ * Unless required by applicable law or agreed to in writing, software 
++ * distributed under the License is distributed on an "AS IS" BASIS, 
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
++ * See the License for the specific language governing permissions and 
++ * limitations under the License.
++*/
++#define LOG_TAG "DMTCP-JNI"
++
++#include <android_runtime/AndroidRuntime.h>
++#include <utils/Log.h>
++#include <utils/misc.h>
++
++#include <dmtcpaware.h>
++
++namespace android {
++
++static jint nativeCheckpoint(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpCheckpoint();
++}
++
++static jint nativeIsEnable(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpIsEnabled();
++}
++
++static jint nativeDelayCheckpointsUnlock(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpDelayCheckpointsUnlock();
++}
++
++static jint nativeDelayCheckpointsLock(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpDelayCheckpointsLock();
++}
++
++static jint nativeRaiseCheckpointBarrier(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpRaiseCheckpointBarrier();
++}
++
++static jint nativeCheckpointBarrier(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpCheckpointBarrier();
++}
++
++static jint nativeSynchronize(JNIEnv *env, jobject clazz) {
++    return (jint)dmtcpSynchronize();
++}
++
++/*
++ * JNI registration.
++ */
++
++static JNINativeMethod g_methods[] = {
++    /* name, signature, funcPtr */
++    { "isEnable", "()I",
++            (void*)nativeIsEnable },
++    { "checkpoint", "()I",
++            (void*)nativeCheckpoint },
++    { "delayCheckpointsLock", "()I",
++            (void*)nativeDelayCheckpointsLock },
++    { "delayCheckpointsUnlock", "()I",
++            (void*)nativeDelayCheckpointsUnlock },
++    { "raiseCheckpointBarrier", "()I",
++            (void*)nativeRaiseCheckpointBarrier },
++    { "checkpointBarrier", "()I",
++            (void*)nativeCheckpointBarrier },
++    { "synchronize", "()I",
++            (void*)nativeSynchronize },
++};
++
++int register_android_os_DMTCP(JNIEnv* env)
++{
++    return AndroidRuntime::registerNativeMethods(env,
++            "android/os/DMTCP", g_methods, NELEM(g_methods));
++}
++
++}; // namespace android
+-- 
+1.7.7.6
+

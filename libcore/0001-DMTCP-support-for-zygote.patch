@@ -1,0 +1,26 @@
+From ff92bacba928082b61a17bf3514e9dc8013edb34 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Fri, 3 Aug 2012 16:08:31 +0800
+Subject: [PATCH] DMTCP support for zygote
+
+Change-Id: I593ea521e04f9c1bf0461cc601525262b59f5be6
+---
+ dalvik/src/main/java/dalvik/system/Zygote.java |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/dalvik/src/main/java/dalvik/system/Zygote.java b/dalvik/src/main/java/dalvik/system/Zygote.java
+index 28c9912..dc0a590 100644
+--- a/dalvik/src/main/java/dalvik/system/Zygote.java
++++ b/dalvik/src/main/java/dalvik/system/Zygote.java
+@@ -60,7 +60,7 @@ public class Zygote {
+      */
+     private static void waitUntilAllThreadsStopped() {
+         File tasks = new File("/proc/self/task");
+-        while (tasks.list().length > 1) {
++        while (tasks.list().length > 2) {
+             try {
+                 // Experimentally, booting and playing about with a stingray, I never saw us
+                 // go round this loop more than once with a 10ms sleep.
+-- 
+1.7.7.6
+

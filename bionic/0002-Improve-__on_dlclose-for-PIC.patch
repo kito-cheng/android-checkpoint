@@ -1,0 +1,43 @@
+From 3af94111bd818582ef73816320eb15f1276b32a8 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Mon, 30 Jul 2012 00:11:40 +0800
+Subject: [PATCH 2/3] Improve __on_dlclose for PIC
+
+- The last implementation is not PIC since its get
+  address of __dso_handle with out GOT, It's will break
+  PIC capability for shared library.
+
+Change-Id: Ib0627d8c30885f79838b52ad6cbc712c4217308c
+---
+ libc/arch-arm/bionic/crtbegin_so.S |   13 +++++++++----
+ 1 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/libc/arch-arm/bionic/crtbegin_so.S b/libc/arch-arm/bionic/crtbegin_so.S
+index 9275b1e..c88d448 100644
+--- a/libc/arch-arm/bionic/crtbegin_so.S
++++ b/libc/arch-arm/bionic/crtbegin_so.S
+@@ -34,12 +34,17 @@
+ # standard.
+ #
+ __on_dlclose:
+-        adr     r0, 0f
+-        ldr     r0, [r0]
++        ldr     r0, .LPICDATA
++.LPIC:
++        add     r0, pc, r0
++        ldr     r1, .LPICDATA+4
++        ldr     r0, [r0, r1]
+         b       __cxa_finalize
+ 
+-0:
+-        .long   __dso_handle
++.LPICDATA:
++	.word   _GLOBAL_OFFSET_TABLE_-(.LPIC+8)
++	.word   __dso_handle(GOT)
++	.size   __on_dlclose, .-__on_dlclose
+ 
+ 	.section .init_array, "aw"
+ 	.globl __INIT_ARRAY__
+-- 
+1.7.7.6
+

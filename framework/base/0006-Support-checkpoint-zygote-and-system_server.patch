@@ -1,0 +1,241 @@
+From bb4db5ab20aba392191b4c3f8bcf2eb72ade8433 Mon Sep 17 00:00:00 2001
+From: Kito Cheng <kito@0xlab.org>
+Date: Mon, 5 Nov 2012 12:39:08 +0800
+Subject: [PATCH 6/6] Support checkpoint zygote and system_server
+
+Change-Id: Ieeae1e0e083dfc4fbbe8c974e161945e383a7b43
+---
+ cmds/system_server/library/Android.mk              |    4 +-
+ cmds/system_server/library/system_init.cpp         |   88 ++++++++++++++++++--
+ core/java/com/android/internal/os/ZygoteInit.java  |   16 ++--
+ services/java/com/android/server/SystemServer.java |   13 +++-
+ 4 files changed, 106 insertions(+), 15 deletions(-)
+
+diff --git a/cmds/system_server/library/Android.mk b/cmds/system_server/library/Android.mk
+index 0596e89..16d5942 100644
+--- a/cmds/system_server/library/Android.mk
++++ b/cmds/system_server/library/Android.mk
+@@ -12,6 +12,7 @@ LOCAL_C_INCLUDES := \
+ 	$(base)/services/surfaceflinger \
+ 	$(base)/services/sensorservice \
+ 	$(base)/media/libmediaplayerservice \
++        external/dmtcp/dmtcp/src \
+ 	$(JNI_H_INCLUDE)
+ 
+ ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
+@@ -28,7 +29,8 @@ LOCAL_SHARED_LIBRARIES := \
+     libinput \
+ 	libutils \
+ 	libbinder \
+-	libcutils
++	libcutils \
++        libdmtcpaware
+ 
+ LOCAL_MODULE:= libsystem_server
+ 
+diff --git a/cmds/system_server/library/system_init.cpp b/cmds/system_server/library/system_init.cpp
+index 59360d3..402e337 100644
+--- a/cmds/system_server/library/system_init.cpp
++++ b/cmds/system_server/library/system_init.cpp
+@@ -29,10 +29,84 @@
+ #include <unistd.h>
+ #include <sys/time.h>
+ #include <cutils/properties.h>
++#include <sys/resource.h>
++
++
++#define ENABLE_CHECKPOINT
++#ifdef ENABLE_CHECKPOINT
++#include <dmtcpaware.h>
++#endif
+ 
+ using namespace android;
+ 
+ namespace android {
++static void restorePriority(int is_ckpt,int is_restart ) {
++    LOGE("restorePriority is_ckpt = %d, is_restart = %d", is_ckpt, is_restart);
++    AndroidRuntime* runtime = AndroidRuntime::getRuntime();
++    IPCThreadState::disableBackgroundScheduling(true);
++    JNIEnv* env = runtime->getJNIEnv();
++    if (env == NULL) {
++        return;
++    }
++    jclass clazz = env->FindClass("android/os/Process");
++    if (clazz == NULL) {
++        LOGE("Can't fild android/os/Process");
++        return;
++    }
++    jmethodID methodId = env->GetStaticMethodID(clazz, "setCanSelfBackground", "(Z)V");
++    if (methodId == NULL) {
++        LOGE("Can't fild setCanSelfBackground");
++        return;
++    }
++
++    env->CallStaticVoidMethod(clazz, methodId, (jvalue*)(jboolean)false);
++    LOGE("Thread %d call setCanSelfBackground", gettid());
++
++    methodId = env->GetStaticMethodID(clazz, "setThreadPriority", "(I)V");
++    if (methodId == NULL) {
++        LOGE("Can't fild setThreadPriority");
++        return;
++    }
++
++    env->CallStaticVoidMethod(clazz, methodId, (jvalue*)(jint)-10);
++    LOGE("Thread %d call setThreadPriority", gettid());
++
++
++    clazz = env->FindClass("com/android/internal/os/BinderInternal");
++    if (clazz == NULL) {
++        LOGE("Can't fild com/android/internal/os/BinderInternal");
++        return;
++    }
++    methodId =
++      env->GetStaticMethodID(clazz, "disableBackgroundScheduling", "(Z)V");
++    if (methodId == NULL) {
++        LOGE("Can't fild setThreadPriority");
++        return;
++    }
++
++    env->CallStaticVoidMethod(clazz, methodId, (jvalue*)(jboolean)true);
++    LOGE("Thread %d call setThreadPriority", gettid());
++
++    setpriority(PRIO_PROCESS, gettid(), -10);
++
++}
++
++static void checkpoint()
++{
++#ifdef ENABLE_CHECKPOINT
++    dmtcpInstallPerThreadHooks(NULL, restorePriority);
++    LOGE("dmtcpDelayCheckpointsUnlock");
++    dmtcpDelayCheckpointsUnlock();
++    LOGE("before dmtcpSynchronize()!");
++    dmtcpSynchronize();
++    LOGE("dmtcpSynchronize()!");
++    LOGE("before dmtcpCheckpointBarrier()!");
++    dmtcpCheckpointBarrier();
++    LOGE("dmtcpCheckpointBarrier() release !");
++    dmtcpUnblockBinder();
++    LOGE("dmtcpUnblockBinder");
++#endif
++}
+ /**
+  * This class is used to kill this process when the runtime dies.
+  */
+@@ -69,13 +143,6 @@ extern "C" status_t system_init()
+         // Start the SurfaceFlinger
+         SurfaceFlinger::instantiate();
+     }
+-
+-    property_get("system_init.startsensorservice", propBuf, "1");
+-    if (strcmp(propBuf, "1") == 0) {
+-        // Start the sensor service
+-        SensorService::instantiate();
+-    }
+-
+     // And now start the Android runtime.  We have to do this bit
+     // of nastiness because the Android runtime initialization requires
+     // some of the core system services to already be started.
+@@ -99,6 +166,13 @@ extern "C" status_t system_init()
+         return UNKNOWN_ERROR;
+     }
+     env->CallStaticVoidMethod(clazz, methodId);
++    checkpoint();
++
++    property_get("system_init.startsensorservice", propBuf, "1");
++    if (strcmp(propBuf, "1") == 0) {
++        // Start the sensor service
++        SensorService::instantiate();
++    }
+ 
+     LOGI("System server: entering thread pool.\n");
+     ProcessState::self()->startThreadPool();
+diff --git a/core/java/com/android/internal/os/ZygoteInit.java b/core/java/com/android/internal/os/ZygoteInit.java
+index f8c8a5e..dcffc68 100644
+--- a/core/java/com/android/internal/os/ZygoteInit.java
++++ b/core/java/com/android/internal/os/ZygoteInit.java
+@@ -509,6 +509,10 @@ public class ZygoteInit {
+ 
+         /* For child process */
+         if (pid == 0) {
++            DMTCP.delayCheckpointsLock();
++            DMTCP.raiseCheckpointBarrier();
++            DMTCP.blockBinder();
++            Log.i(TAG, "!!!!!---------blockBinder------------!!!!!!!");
+             handleSystemServerProcess(parsedArgs);
+         }
+ 
+@@ -538,6 +542,12 @@ public class ZygoteInit {
+                 throw new RuntimeException(argv[0] + USAGE_STRING);
+             }
+ 
++            if (argv[1].equals("start-system-server")) {
++                startSystemServer();
++            } else if (!argv[1].equals("")) {
++                throw new RuntimeException(argv[0] + USAGE_STRING);
++            }
++
+             Log.i(TAG, "!!!!!---------DMTCP------------!!!!!!!");
+             DMTCP.raiseCheckpointBarrier();
+             Log.i(TAG, "!!!!!---------start sync in zygote------------!!!!!!!");
+@@ -549,12 +559,6 @@ public class ZygoteInit {
+             Log.i(TAG, "!!!!!---------done Barrier in zygote------------!!!!!!!");
+             registerZygoteSocket();
+ 
+-            if (argv[1].equals("start-system-server")) {
+-                startSystemServer();
+-            } else if (!argv[1].equals("")) {
+-                throw new RuntimeException(argv[0] + USAGE_STRING);
+-            }
+-
+             Log.i(TAG, "Accepting command socket connections");
+ 
+             if (ZYGOTE_FORK_MODE) {
+diff --git a/services/java/com/android/server/SystemServer.java b/services/java/com/android/server/SystemServer.java
+index c13a3e2..eeab42f 100644
+--- a/services/java/com/android/server/SystemServer.java
++++ b/services/java/com/android/server/SystemServer.java
+@@ -33,6 +33,7 @@ import android.database.ContentObserver;
+ import android.database.Cursor;
+ import android.media.AudioService;
+ import android.net.wifi.p2p.WifiP2pService;
++import android.os.DMTCP;
+ import android.os.Looper;
+ import android.os.RemoteException;
+ import android.os.ServiceManager;
+@@ -97,7 +98,6 @@ class ServerThread extends Thread {
+         EventLog.writeEvent(EventLogTags.BOOT_PROGRESS_SYSTEM_RUN,
+             SystemClock.uptimeMillis());
+ 
+-        Looper.prepare();
+ 
+         android.os.Process.setThreadPriority(
+                 android.os.Process.THREAD_PRIORITY_FOREGROUND);
+@@ -105,6 +105,7 @@ class ServerThread extends Thread {
+         BinderInternal.disableBackgroundScheduling(true);
+         android.os.Process.setCanSelfBackground(false);
+ 
++        DMTCP.delayCheckpointsLock();
+         // Check whether we failed to shut down last time we tried.
+         {
+             final String shutdownAction = SystemProperties.get(
+@@ -152,6 +153,16 @@ class ServerThread extends Thread {
+         NetworkTimeUpdateService networkTimeUpdater = null;
+         CpuGovernorService cpuGovernorManager = null;
+ 
++        DMTCP.delayCheckpointsUnlock();
++
++        while (DMTCP.isBlockBinder()!=0) {
++          //SystemClock.sleep(10);
++          Slog.e(TAG, "!!!!!!!!!!!!!-------------isBlockBinder sleep---------------!!!!!");
++        }
++
++
++        Looper.prepare();
++
+         // Critical services...
+         try {
+             Slog.i(TAG, "Entropy Service");
+-- 
+1.7.7.6
+
